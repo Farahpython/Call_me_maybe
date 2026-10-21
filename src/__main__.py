@@ -77,22 +77,26 @@ def response_function(input_text: str, model: Small_LLM_Model,
         function, the model, and a list of valid function names and returns
         the name of the chosen function.
     """
-    vocab = []
     allowed = []
-    chosen_function = ""
-    ids_list = model.encode(input_text).flatten().tolist()  #returns token IDs
-    vocab_scores = model.get_logits_from_input_ids(ids_list)  #returns raw logits
-    vocab_size = len(vocab_scores)
-    for i in range(vocab_size):
-        vocab += [model.decode([i])]
-    for i in range(vocab_size):
-        text = vocab[i]
-        if not text:
-            continue
-        candidate = chosen_function + text
-        if any(name.startswith(candidate) for name in valid_funcs):
+    vocab = []
+    candidate = "" # generated so far
+    input_ids = model.encode(input_text).flatten().tolist()  #  from tokens to token IDs
+    # check how many possible tokens exist.
+    scores_list = model.get_logits_from_input_ids(input_ids) #  retrive list of scores
+    scores = len(scores_list) #retrieves number of logits
+    # goal is to inspect the vocabulary, not the prompt.
+    while candidate not in valid_funcs:
+        for i in range(scores):
+            text = model.decode([i]) # next token we're testing
+            if not text:
+                continue
+            chosen_function = candidate + text
+        if any(name.startswith(chosen_function) for name in valid_funcs):
             allowed.append(i)
-    return chosen_function
+    best_token = max(allowed, key=lambda i: scores_list[i])
+    candidate = model.decode([best_token])
+    input_ids.append(best_token)
+    return best_function
 
 
 if __name__ == "__main__":
