@@ -70,35 +70,40 @@ def request_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
     return model_prompt
 
 
-def response_function(input_text: str, model: Small_LLM_Model,
-    valid_funcs: list[str]) -> str:
+def response_function(input_text: str,
+                      model: Small_LLM_Model, valid_funcs: list[str]) -> str:
     """
         This function receives the input text created by the request_builder
         function, the model, and a list of valid function names and returns
         the name of the chosen function.
     """
-    allowed = []
-    vocab = []
-    candidate = "" # generated so far
-    input_ids = model.encode(input_text).flatten().tolist()  #  from tokens to token IDs
-    # check how many possible tokens exist.
-    scores_list = model.get_logits_from_input_ids(input_ids) #  retrive list of scores
-    scores = len(scores_list) #retrieves number of logits
+    token_so_far = ""  # generated so far
+    # from tokens to token IDs
+    input_ids = model.encode(input_text).flatten().tolist()
     # goal is to inspect the vocabulary, not the prompt.
-    while candidate not in valid_funcs:
+    while token_so_far not in valid_funcs:
+        """ check how many possible tokens exist.
+        retrive list of scores """
+        scores_list = model.get_logits_from_input_ids(input_ids)
+        scores = len(scores_list)  # retrieves number of logits
+        allowed = []
         for i in range(scores):
-            text = model.decode([i]) # next token we're testing
-            if not text:
+            text = model.decode([i])  # next token we're testing
+            if not text:  # prevent empty strings
                 continue
-            chosen_function = candidate + text
-        if any(name.startswith(chosen_function) for name in valid_funcs):
-            allowed.append(i)
-    best_token = max(allowed, key=lambda i: scores_list[i])
-    candidate = model.decode([best_token])
-    input_ids.append(best_token)
-    return best_function
+            possible_token = token_so_far + text
+            if any(name.startswith(possible_token) for name in valid_funcs):
+                allowed.append(i)
+        best_token = max(allowed, key=lambda i: scores_list[i])
+        if not allowed:
+            return token_so_far
+        token_so_far += model.decode([best_token])
+        input_ids.append(best_token)
+    return token_so_far
 
 
 if __name__ == "__main__":
-    text = request_builder(prompts[0], functions)
-    response_function(text, model, functions)
+    text = request_builder(prompts[10], functions)
+    valid_funcs = [f.name for f in functions]
+    result = response_function(text, model, valid_funcs)
+    print(result)
