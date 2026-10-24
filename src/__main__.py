@@ -51,11 +51,6 @@ def load_prompt(file: str) -> list[Prompt]:
         sys.exit(1)
 
 
-functions = load_function_defs("data/input/functions_definition.json")
-prompts = load_prompt("data/input/function_calling_tests.json")
-model = Small_LLM_Model()
-
-
 def request_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
     """
         This function takes the loaded function definitions and a single prompt
@@ -102,8 +97,12 @@ def response_function(input_text: str,
     return token_so_far
 
 
+def main() -> None:
+    functions = load_function_defs("data/input/functions_definition.json")
+    prompts = load_prompt("data/input/function_calling_tests.json")
+    model = Small_LLM_Model()
+    print(functions)
+
+
 if __name__ == "__main__":
-    text = request_builder(prompts[10], functions)
-    valid_funcs = [f.name for f in functions]
-    result = response_function(text, model, valid_funcs)
-    print(result)
+    main()
