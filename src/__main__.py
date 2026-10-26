@@ -1,18 +1,16 @@
 import sys
 import json
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 from llm_sdk import Small_LLM_Model
+from .classes import FunctionDefinition, Prompt
 
 
-class FunctionDefinition(BaseModel):
-    name: str
-    description: str
-    parameters: dict[str, dict[str, str]]
-    returns: dict[str, str]
-
-
-class Prompt(BaseModel):
-    prompt: str
+type_mapping = {
+    "number": float,
+    "string": str, 
+    "integer": int,
+    "boolean": bool
+}
 
 
 def load_function_defs(file: str) -> list[FunctionDefinition]:
@@ -51,24 +49,10 @@ def load_prompt(file: str) -> list[Prompt]:
         sys.exit(1)
 
 
-def request_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
-    """
-        This function takes the loaded function definitions and a single prompt
-        and returns them as a single text so its passed to the model.
-    """
-    model_prompt = ""
-    model_prompt += "Available Functions:\n"
-    for d in defs:
-        model_prompt += f"- {d.name}: {d.description}\n"
-    model_prompt += f"User request: {prompt.prompt}\n"
-    model_prompt += "Function to call:"
-    return model_prompt
-
-
 def response_function(input_text: str,
                       model: Small_LLM_Model, valid_funcs: list[str]) -> str:
     """
-        This function receives the input text created by the request_builder
+        This function receives the input text created by the prompt_builder
         function, the model, and a list of valid function names and returns
         the name of the chosen function.
     """
@@ -97,11 +81,57 @@ def response_function(input_text: str,
     return token_so_far
 
 
+def response_arguements(input_text: str, model: Small_LLM_Model,
+                         function: FunctionDefinition) -> dict:
+    argument_so_far = ""
+    input_ids = model.encode(input_text).flatten().tolist()
+    while not argument_so_far.endswith("}"):
+        scores_list = model.get_logits_from_input_ids(input_ids)
+        scores = len(scores_list)
+        allowed = []
+        for i in range(scores):
+            text = model.decode([i])
+            if not text:
+                continue
+            possible_token = argument_so_far + text
+            for name, p_type in f.parameters.items():
+                python_type = type_mapping[p_type["type"]]
+
+
+        
+
+def create_dynamic_model(f: FunctionDefinition) -> Type[BaseModel]:
+    """
+        This function creates and returns a pydantic class out of each
+        function definition dynamically based on its name and given parameters.
+    """
+    fields = {}
+    for name, p_type in f.parameters.items():
+        python_type = type_mapping[p_type["type"]]
+        fields[name] = (python_type, ...)
+    ClassCreated = create_model(f.name, **fields)
+    return ClassCreated
+
+
 def main() -> None:
     functions = load_function_defs("data/input/functions_definition.json")
     prompts = load_prompt("data/input/function_calling_tests.json")
     model = Small_LLM_Model()
-    print(functions)
+    valid_defs = []
+    for f in functions:
+        valid_defs.append(f.name)
+    for prompt in prompts:
+        input_prompt = prompt_builder(prompt, functions)
+        chosen_function = response_function(input_prompt, model, valid_defs)
+        for f in functions:
+            if f.name == chosen_function:
+                second_input_prompt = second_prompt_builder(prompt, f)
+                chosen_arguments = response_arguments(second_input_prompt, model, f)
+                ClassCreated = create_dynamic_model(f)
+                try:
+                    validated_arguements = ClassCreated(**chosen_arguments)
+                except ValidationError as e:
+                    print("Invalid arguements: ", e)
 
 
 if __name__ == "__main__":
