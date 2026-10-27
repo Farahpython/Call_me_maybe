@@ -15,7 +15,7 @@ def prompt_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
     return model_prompt
 
 
-def second_prompt_builer(prompt: Prompt,
+def second_prompt_builder(prompt: Prompt,
                          chosen_function: FunctionDefinition) -> str:
     model_prompt = ""
     model_prompt += f"User request: {prompt.prompt}\n"

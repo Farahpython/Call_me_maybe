@@ -1,7 +1,9 @@
 import sys
 import json
+import re
 from pydantic import BaseModel, ValidationError, create_model
 from llm_sdk import Small_LLM_Model
+from .prompt_builders import prompt_builder, second_prompt_builder
 from .classes import FunctionDefinition, Prompt
 
 
@@ -94,9 +96,9 @@ def response_arguements(input_text: str, model: Small_LLM_Model,
             if not text:
                 continue
             possible_token = argument_so_far + text
-            for name, p_type in f.parameters.items():
+            for name, p_type in function.parameters.items():
                 python_type = type_mapping[p_type["type"]]
-
+                if python_type == #the one in the schema (?)
 
         
 
@@ -123,6 +125,7 @@ def main() -> None:
     for prompt in prompts:
         input_prompt = prompt_builder(prompt, functions)
         chosen_function = response_function(input_prompt, model, valid_defs)
+    """
         for f in functions:
             if f.name == chosen_function:
                 second_input_prompt = second_prompt_builder(prompt, f)
@@ -132,7 +135,7 @@ def main() -> None:
                     validated_arguements = ClassCreated(**chosen_arguments)
                 except ValidationError as e:
                     print("Invalid arguements: ", e)
-
+    """
 
 if __name__ == "__main__":
     main()
