@@ -1,3 +1,4 @@
+import json
 from .classes import Prompt, FunctionDefinition
 
 
@@ -10,18 +11,23 @@ def prompt_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
     model_prompt += "Available Functions:\n"
     for d in defs:
         model_prompt += f"- {d.name}: {d.description}\n"
-        model_prompt += f"User request: {prompt.prompt}\n"
-        model_prompt += "Function to call:"
+    model_prompt += f"User request: {prompt.prompt}\n"
+    model_prompt += "Function to call:"
     return model_prompt
 
 
-def second_prompt_builder(prompt: Prompt,
-                         chosen_function: FunctionDefinition) -> str:
+def second_prompt_builder(prompt: Prompt, chosen_function: FunctionDefinition,
+                          candidates_of_each_parameter:
+                          dict[str, list[str]]) -> str:
     model_prompt = ""
     model_prompt += f"User request: {prompt.prompt}\n"
     model_prompt += f"Selected function: {chosen_function.name}\n"
     model_prompt += "Required parameters:\n"
     for name, details in chosen_function.parameters.items():
         model_prompt += f"- {name}: {details['type']}\n"
-        model_prompt += "Generate only a JSON object containing the arguments."
+        model_prompt += (
+            f" Candidates:"
+            f"{json.dumps(candidates_of_each_parameter[name])}\n"
+        )
+    model_prompt += "Generate only a JSON object containing the arguments."
     return model_prompt

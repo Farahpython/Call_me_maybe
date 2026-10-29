@@ -1,6 +1,7 @@
+import re
 import sys
 import json
-import re
+from typing import Type
 from pydantic import BaseModel, ValidationError, create_model
 from llm_sdk import Small_LLM_Model
 from .prompt_builders import prompt_builder, second_prompt_builder
@@ -8,9 +9,9 @@ from .classes import FunctionDefinition, Prompt
 
 
 type_mapping = {
-    "number": float,
-    "string": str, 
     "integer": int,
+    "number": float,
+    "string": str,
     "boolean": bool
 }
 
@@ -51,8 +52,19 @@ def load_prompt(file: str) -> list[Prompt]:
         sys.exit(1)
 
 
+def build_vocab(model: Small_LLM_Model) -> list[str]:
+    scores_list = model.get_logits_from_input_ids([0])
+    scores = len(scores_list)
+    vocab = []
+    for i in range(scores):
+        vocab.append(model.decode([i]))
+    return vocab
+
+
 def response_function(input_text: str,
-                      model: Small_LLM_Model, valid_funcs: list[str]) -> str:
+                      model: Small_LLM_Model,
+                      valid_funcs: list[str],
+                      vocab: list[str]) -> str:
     """
         This function receives the input text created by the prompt_builder
         function, the model, and a list of valid function names and returns
@@ -61,44 +73,53 @@ def response_function(input_text: str,
     token_so_far = ""  # generated so far
     # from tokens to token IDs
     input_ids = model.encode(input_text).flatten().tolist()
-    # goal is to inspect the vocabulary, not the prompt.
     while token_so_far not in valid_funcs:
-        """ check how many possible tokens exist.
-        retrive list of scores """
         scores_list = model.get_logits_from_input_ids(input_ids)
-        scores = len(scores_list)  # retrieves number of logits
         allowed = []
-        for i in range(scores):
-            text = model.decode([i])  # next token we're testing
-            if not text:  # prevent empty strings
+        for i in range(len(vocab)):
+            text = vocab[i]
+            if not text:
                 continue
             possible_token = token_so_far + text
             if any(name.startswith(possible_token) for name in valid_funcs):
                 allowed.append(i)
-        best_token = max(allowed, key=lambda i: scores_list[i])
         if not allowed:
             return token_so_far
-        token_so_far += model.decode([best_token])
+        best_token = max(allowed, key=lambda i: scores_list[i])
+        token_so_far += vocab[best_token]
         input_ids.append(best_token)
     return token_so_far
 
 
-def response_arguements(input_text: str, model: Small_LLM_Model,
-                         function: FunctionDefinition) -> dict:
+def extract_candidates(prompt: str, parameter_type: str) -> list[str]:
+    if parameter_type == "integer":
+        candidates = re.findall(r"-?\d+", prompt)
+    elif parameter_type == "number":
+        candidates = re.findall(r"-?(?:\d*[.])?\d+", prompt)
+    elif parameter_type == "string":
+        matches = re.findall(r"""(['"])(.*?)\1""", prompt)
+        candidates = [match[1] for match in matches]
+    else:
+        candidates = []
+    return candidates
+
+
+def response_arguments(input_text: str, model: Small_LLM_Model,
+                       function: FunctionDefinition, vocab: list[str],
+                       candidates_by_parameter: dict[str, list[str]]
+                    ) -> dict:
+    """ Constrained decoding for arguments, comes AFTER 
+    candidate argument extraction """
     argument_so_far = ""
     input_ids = model.encode(input_text).flatten().tolist()
     while not argument_so_far.endswith("}"):
         scores_list = model.get_logits_from_input_ids(input_ids)
-        scores = len(scores_list)
         allowed = []
-        for i in range(scores):
-            text = model.decode([i])
+        for i in range(len(vocab)):
+            text = vocab[i]
             if not text:
                 continue
             possible_token = argument_so_far + text
-            for name, p_type in function.parameters.items():
-                python_type = type_mapping[p_type["type"]]
-                if python_type == #the one in the schema (?)
 
         
 
@@ -119,17 +140,23 @@ def main() -> None:
     functions = load_function_defs("data/input/functions_definition.json")
     prompts = load_prompt("data/input/function_calling_tests.json")
     model = Small_LLM_Model()
+    vocab = build_vocab(model)
+    """
     valid_defs = []
     for f in functions:
         valid_defs.append(f.name)
     for prompt in prompts:
         input_prompt = prompt_builder(prompt, functions)
         chosen_function = response_function(input_prompt, model, valid_defs)
-    """
         for f in functions:
             if f.name == chosen_function:
-                second_input_prompt = second_prompt_builder(prompt, f)
-                chosen_arguments = response_arguments(second_input_prompt, model, f)
+                candidates_by_parameter = {}
+                for name, p_type in f.parameters.items():
+                    candidates = extract_candidates(prompt.prompt, p_type["type"])
+                    candidates_by_parameter[name] = candidates
+                second_input_prompt = second_prompt_builder(prompt, f, candidates_by_parameter)
+                chosen_arguments = response_arguments(second_input_prompt, model,
+                                                  f, candidates_by_parameter)
                 ClassCreated = create_dynamic_model(f)
                 try:
                     validated_arguements = ClassCreated(**chosen_arguments)
