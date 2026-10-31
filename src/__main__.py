@@ -109,7 +109,7 @@ def response_arguments(input_text: str, model: Small_LLM_Model,
                        candidates_by_parameter: dict[str, list[str]]
                     ) -> dict:
     """ Constrained decoding for arguments, comes AFTER 
-    candidate argument extraction """
+    candidate argument extraction
     argument_so_far = ""
     input_ids = model.encode(input_text).flatten().tolist()
     while not argument_so_far.endswith("}"):
@@ -120,6 +120,22 @@ def response_arguments(input_text: str, model: Small_LLM_Model,
             if not text:
                 continue
             possible_token = argument_so_far + text
+            if is_valid_json_prefix(possible, function,
+                candidates_by_parameter):
+                allowed.append(i) """
+    arguments = {}
+    used = []
+    for name, details in function.parameters.items():
+        parameter_type = details["type"]
+        options = candidates_by_parameter.get(name, [])
+        options = remove_used(candidates, used)
+        # determines whether an option was chosen
+        value = None
+        if options:
+            prompt = choice_prompt_builder(user_prompt, function, name,
+                                           parameter_type, options)
+
+        
 
         
 
@@ -141,13 +157,12 @@ def main() -> None:
     prompts = load_prompt("data/input/function_calling_tests.json")
     model = Small_LLM_Model()
     vocab = build_vocab(model)
-    """
     valid_defs = []
     for f in functions:
         valid_defs.append(f.name)
     for prompt in prompts:
         input_prompt = prompt_builder(prompt, functions)
-        chosen_function = response_function(input_prompt, model, valid_defs)
+        chosen_function = response_function(input_prompt, model, valid_defs, vocab)
         for f in functions:
             if f.name == chosen_function:
                 candidates_by_parameter = {}
@@ -155,14 +170,17 @@ def main() -> None:
                     candidates = extract_candidates(prompt.prompt, p_type["type"])
                     candidates_by_parameter[name] = candidates
                 second_input_prompt = second_prompt_builder(prompt, f, candidates_by_parameter)
+                print(second_input_prompt)
+                """
                 chosen_arguments = response_arguments(second_input_prompt, model,
-                                                  f, candidates_by_parameter)
+                    f, vocab, candidates_by_parameter)
+                print(chosen_arguments)
                 ClassCreated = create_dynamic_model(f)
                 try:
                     validated_arguements = ClassCreated(**chosen_arguments)
                 except ValidationError as e:
                     print("Invalid arguements: ", e)
-    """
+                """
 
 if __name__ == "__main__":
     main()

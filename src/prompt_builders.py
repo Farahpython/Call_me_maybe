@@ -16,18 +16,18 @@ def prompt_builder(prompt: Prompt, defs: list[FunctionDefinition]) -> str:
     return model_prompt
 
 
-def second_prompt_builder(prompt: Prompt, chosen_function: FunctionDefinition,
+def second_prompt_builder(prompt: Prompt, f: FunctionDefinition,
                           candidates_of_each_parameter:
                           dict[str, list[str]]) -> str:
-    model_prompt = ""
-    model_prompt += f"User request: {prompt.prompt}\n"
-    model_prompt += f"Selected function: {chosen_function.name}\n"
-    model_prompt += "Required parameters:\n"
-    for name, details in chosen_function.parameters.items():
-        model_prompt += f"- {name}: {details['type']}\n"
-        model_prompt += (
-            f" Candidates:"
-            f"{json.dumps(candidates_of_each_parameter[name])}\n"
-        )
-    model_prompt += "Generate only a JSON object containing the arguments."
-    return model_prompt
+    """Numbered choice prompt; the last number is 'none of the above'."""
+    text = f"User request: {prompt}\n"
+    text += f"Function: {f.name} - {f.description}\n"
+    for name, details in f.parameters.items():
+        text += f"- parameter: {f.name}, type: {details['type']}\n"
+    text += f"Parameter to fill now: {parameter}\n"
+    text += "Which option is the value of this parameter?\n"
+    for number, option in enumerate(options, start=1):
+        text += f"{number}. {option}\n"
+    text += f"{len(options) + 1}. None of the above\n"
+    text += "Answer: "
+    return text
