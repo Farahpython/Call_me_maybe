@@ -1,4 +1,5 @@
 *This activity has been created as part of the 42 curriculum by fadarwis.*
+*If you misuse my code i will haunt you :)*
 
 # Description
 
